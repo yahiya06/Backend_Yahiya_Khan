@@ -24,6 +24,8 @@ func (s *Server) Routes() http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("POST /register", s.handleRegister)
+	mux.HandleFunc("POST /users", s.handleCreateUser)
+	mux.HandleFunc("POST /apps", s.handleCreateApp)
 	return mux
 }
 

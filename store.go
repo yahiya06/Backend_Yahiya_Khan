@@ -55,3 +55,52 @@ func (s *Store) addUserLocked(orgID, name, email, role string) User {
 	s.usersByToken[u.Token] = u
 	return *u
 }
+
+// UserByToken finds the user who owns this token. Returns a copy.
+func (s *Store) UserByToken(token string) (User, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	u, ok := s.usersByToken[token]
+	if !ok {
+		return User{}, false
+	}
+	return *u, true
+}
+
+// AppByKey finds the app that owns this app key. Returns a copy.
+func (s *Store) AppByKey(key string) (App, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	a, ok := s.appsByKey[key]
+	if !ok {
+		return App{}, false
+	}
+	return *a, true
+}
+
+// AddUser adds a user to an existing company.
+func (s *Store) AddUser(orgID, name, email, role string) User {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.addUserLocked(orgID, name, email, role)
+}
+
+// AddApp adds an app to a company and gives it a random appKey.
+func (s *Store) AddApp(orgID, name, platform string) App {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.nextApp++
+	a := &App{
+		AppID:    fmt.Sprintf("app_%d", s.nextApp),
+		Name:     name,
+		Platform: platform,
+		AppKey:   randomHex(),
+		OrgID:    orgID,
+	}
+	s.apps[a.AppID] = a
+	s.appsByKey[a.AppKey] = a
+	return *a
+}
