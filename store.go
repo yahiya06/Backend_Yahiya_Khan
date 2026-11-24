@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -140,4 +141,75 @@ func (s *Store) ReportAlert(appID, deviceID, threatType string, severity int) (A
 	}
 	s.alerts[a.ID] = a
 	return *a, true
+}
+
+// alertInOrgLocked reports whether the alert belongs to the company.
+// Caller MUST hold s.mu.
+func (s *Store) alertInOrgLocked(a *Alert, orgID string) bool {
+	app, ok := s.apps[a.AppID]
+	return ok && app.OrgID == orgID
+}
+
+// ListAlerts returns the company's alerts, newest lastSeen first.
+// status is "", "open" or "resolved". The result is never nil.
+func (s *Store) ListAlerts(orgID, status string) []Alert {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	out := []Alert{} // empty slice, NOT nil, so JSON gives [] and not null
+	for _, a := range s.alerts {
+		if !s.alertInOrgLocked(a, orgID) {
+			continue
+		}
+		if status != "" && a.Status != status {
+			continue
+		}
+		out = append(out, *a)
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].LastSeen != out[j].LastSeen {
+			return out[i].LastSeen > out[j].LastSeen
+		}
+		return out[i].ID > out[j].ID // tie-breaker: same second, newer id first
+	})
+	return out
+}
+
+// GetAlert returns one alert, only if it belongs to the company.
+func (s *Store) GetAlert(orgID, id string) (Alert, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	a, ok := s.alerts[id]
+	if !ok || !s.alertInOrgLocked(a, orgID) {
+		return Alert{}, false // same answer for "missing" and "not yours"
+	}
+	return *a, true
+}
+
+// ResolveResult tells the handler what happened.
+type ResolveResult int
+
+const (
+	ResolveOK ResolveResult = iota
+	ResolveNotFound
+	ResolveAlready
+)
+
+// ResolveAlert marks an alert resolved. Check and change happen under one lock.
+func (s *Store) ResolveAlert(orgID, id, userID string) (Alert, ResolveResult) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	a, ok := s.alerts[id]
+	if !ok || !s.alertInOrgLocked(a, orgID) {
+		return Alert{}, ResolveNotFound
+	}
+	if a.Status == "resolved" {
+		return Alert{}, ResolveAlready
+	}
+	a.Status = "resolved"
+	a.ResolvedBy = userID
+	return *a, ResolveOK
 }

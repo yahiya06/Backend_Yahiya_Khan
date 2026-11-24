@@ -140,3 +140,50 @@ func (s *Server) handleReportAlert(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, alert) // 200
 	}
 }
+
+func (s *Server) handleListAlerts(w http.ResponseWriter, r *http.Request) {
+	caller, ok := s.authUser(w, r) // 401 (admin or viewer is fine)
+	if !ok {
+		return
+	}
+
+	status := r.URL.Query().Get("status")
+	if status != "" && status != "open" && status != "resolved" {
+		writeError(w, http.StatusBadRequest, `status must be "open" or "resolved"`)
+		return
+	}
+
+	alerts := s.store.ListAlerts(caller.OrgID, status)
+	writeJSON(w, http.StatusOK, map[string]any{"alerts": alerts})
+}
+
+func (s *Server) handleGetAlert(w http.ResponseWriter, r *http.Request) {
+	caller, ok := s.authUser(w, r)
+	if !ok {
+		return
+	}
+
+	alert, found := s.store.GetAlert(caller.OrgID, r.PathValue("id"))
+	if !found {
+		writeError(w, http.StatusNotFound, "alert not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, alert)
+}
+
+func (s *Server) handleResolveAlert(w http.ResponseWriter, r *http.Request) {
+	caller, ok := s.authAdmin(w, r) // 401, then 403
+	if !ok {
+		return
+	}
+
+	alert, result := s.store.ResolveAlert(caller.OrgID, r.PathValue("id"), caller.UserID)
+	switch result {
+	case ResolveNotFound:
+		writeError(w, http.StatusNotFound, "alert not found") // 404
+	case ResolveAlready:
+		writeError(w, http.StatusConflict, "alert is already resolved") // 409
+	default:
+		writeJSON(w, http.StatusOK, alert)
+	}
+}
