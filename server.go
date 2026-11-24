@@ -9,10 +9,12 @@ import (
 )
 
 // Server holds all in-memory data (we'll fill this in step 2).
-type Server struct{}
+type Server struct {
+	store *Store
+}
 
 func NewServer() *Server {
-	return &Server{}
+	return &Server{store: NewStore()}
 }
 
 // Routes registers every URL. Go 1.22 lets us put the method in the pattern.
@@ -21,6 +23,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	mux.HandleFunc("POST /register", s.handleRegister)
 	return mux
 }
 
@@ -48,4 +51,14 @@ func randomHex() string {
 // nowUTC returns the current time as RFC 3339 in UTC (rule R10).
 func nowUTC() string {
 	return time.Now().UTC().Format(time.RFC3339)
+}
+
+// decodeJSON reads the request body into v. On failure it sends 400 and returns false.
+func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // max 1 MB
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return false
+	}
+	return true
 }
