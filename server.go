@@ -26,6 +26,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /register", s.handleRegister)
 	mux.HandleFunc("POST /users", s.handleCreateUser)
 	mux.HandleFunc("POST /apps", s.handleCreateApp)
+	mux.HandleFunc("POST /alerts", s.handleReportAlert)
 	return mux
 }
 

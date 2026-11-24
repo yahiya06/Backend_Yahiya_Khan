@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -94,4 +96,47 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 
 	app := s.store.AddApp(caller.OrgID, req.Name, req.Platform)
 	writeJSON(w, http.StatusCreated, app)
+}
+
+func (s *Server) handleReportAlert(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.authApp(w, r) // 401 for missing or wrong app key
+	if !ok {
+		return
+	}
+
+	// severity is a pointer so we can tell "missing" from "0".
+	// json.Number keeps the raw number so we can reject 4.5 or "5".
+	var req struct {
+		DeviceID   string       `json:"deviceId"`
+		ThreatType string       `json:"threatType"`
+		Severity   *json.Number `json:"severity"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+
+	req.DeviceID = strings.TrimSpace(req.DeviceID)
+	req.ThreatType = strings.TrimSpace(req.ThreatType)
+
+	if req.DeviceID == "" || req.ThreatType == "" {
+		writeError(w, http.StatusBadRequest, "deviceId and threatType must not be empty")
+		return
+	}
+	if req.Severity == nil {
+		writeError(w, http.StatusBadRequest, "severity is required")
+		return
+	}
+	// Atoi fails for 4.5, 1e1, and anything that is not a whole number.
+	severity, err := strconv.Atoi(req.Severity.String())
+	if err != nil || severity < 1 || severity > 5 {
+		writeError(w, http.StatusBadRequest, "severity must be a whole number from 1 to 5")
+		return
+	}
+
+	alert, created := s.store.ReportAlert(app.AppID, req.DeviceID, req.ThreatType, severity)
+	if created {
+		writeJSON(w, http.StatusCreated, alert) // 201
+	} else {
+		writeJSON(w, http.StatusOK, alert) // 200
+	}
 }

@@ -104,3 +104,40 @@ func (s *Store) AddApp(orgID, name, platform string) App {
 	s.appsByKey[a.AppKey] = a
 	return *a
 }
+
+// ReportAlert handles one alert from the SDK.
+// It returns the alert (a copy) and created=true if a new alert was made.
+// The whole "look for an open alert, then update or create" runs under ONE lock.
+func (s *Store) ReportAlert(appID, deviceID, threatType string, severity int) (Alert, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := nowUTC()
+
+	// 1. Is there an OPEN alert for the same app + device + threat?
+	for _, a := range s.alerts {
+		if a.AppID == appID && a.DeviceID == deviceID &&
+			a.ThreatType == threatType && a.Status == "open" {
+			a.Count++        // only count and lastSeen change
+			a.LastSeen = now // severity stays as the first one
+			return *a, false
+		}
+	}
+
+	// 2. No open alert: create a new one.
+	s.nextAlert++
+	a := &Alert{
+		ID:         fmt.Sprintf("alr_%d", s.nextAlert),
+		AppID:      appID,
+		DeviceID:   deviceID,
+		ThreatType: threatType,
+		Severity:   severity,
+		Count:      1,
+		Status:     "open",
+		FirstSeen:  now,
+		LastSeen:   now,
+		ResolvedBy: "",
+	}
+	s.alerts[a.ID] = a
+	return *a, true
+}
