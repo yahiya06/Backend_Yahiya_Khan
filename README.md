@@ -37,7 +37,7 @@ README.md - this file
 
 All the routes work and I went through the 22 self-check steps in Postman.
 Step 22 (50 at once) I checked with the concurrency test, not by hand.
-Not done: <<bonus items you skipped>>. Data is lost when the server restarts
+Not done: I did not do the bonus items. Data is lost when the server restarts
 because there is no database.
 
 ## How AI helped
@@ -48,7 +48,7 @@ because there is no database.
   
   2. Build a Threat Alert REST API in Go using standard library only. Follow the assignment requirements, use in-memory storage, implement authentication, authorization, alert deduplication and concurrency safety. Keep the code simple and modular.
 
-- One thing the AI got wrong, and how I found and fixed it: Claude told me that sending severity as a string ("5" with quotes) would give 400. I tested it in Postman and it returned 201, so the string was accepted
+- One thing the AI got wrong, and how I found and fixed it: Claude told me that sending severity as a string ("5" with quotes) would give 400. I tested it in Postman and it returned 201, so the string was acceptedI fixed it by reading severity as json.RawMessage and returning 400 if it starts with a quote. I tested again and got 400.
 
 - One part I wrote or changed myself without AI: I changed some of the error messages in handlers.go and auth.go to make them shorter and clearer.
 
